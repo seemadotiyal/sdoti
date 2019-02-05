@@ -1,0 +1,162 @@
+<link rel="import" href="../../bower_components/polymer/polymer.html">
+<link rel="import" href="../../bower_components/iron-ajax/iron-ajax.html">
+<link rel="import" href="../../bower_components/px-dropdown/px-dropdown.html">
+<link rel="import" href="../../bower_components/px-icon-set/px-icon-set.html">
+<link rel="import" href="../asset-browser/asset-browser.html">
+<link rel="import" href="../seed-table/seed-table2.html">
+<link rel="import" href="../kpi-bar/kpi-bar.html">
+<link rel="import" href="mytest-view-styles.html">
+<link rel="import" href="../../bower_components/px-card/px-card.html">
+
+<dom-module id="mytest-view">
+    <template>
+        <asset-browser id="assetBrowser" asset-model="{{mytestAssetModel}}" opened-asset="{{openedAsset}}"
+                       asset-query-url="/api/predix-asset/asset/Compressor-CMMS-Compressor-2018"
+                       asset-group-query-url="/api/predix-asset/group">
+        </asset-browser>
+        <!-- If the RMD datasource is not enabled, you can pass in an asset directly. -->
+        <!--<seed-table asset-data="{{openedAsset}}" show-asset-only="true"></seed-table>-->
+
+        <!-- If RMD datasource is enabled, call that and pass data to the table. -->
+
+        <px-card header-text="My Test Data" class="myTestTable">
+        <div class="row">
+            <div class="tableContent">
+                <seed-table2 id="seedTable2" hidden$={{timeSeriesOnly}} mytest-data="{{mytestTableData}}"
+                             show-clone-button="{{showCloneButton}}" is-a-clone="{{assetIsAClone}}"
+                             uri="{{uri}}"></seed-table2>
+            </div>
+            <div class="buttonContent">
+                <iron-ajax id="mytesttableAjaxEl"></iron-ajax>
+                <button id="readBtn" class="btn btn--primary csv-export-btn" on-tap="_readMyTestData" hidden>Read
+                </button>
+                <button id="saveBtn" class="btn btn--primary csv-export-btn" on-tap="_saveMyTestData" hidden>Save
+                </button>
+            </div>
+        </div>
+        </px-card>
+
+    </template>
+    <script>
+        Polymer({
+            is: 'mytest-view',
+            properties: {
+                mytestAssetModel: {
+                    type: Object,
+                    observer: '_assetModelChanged'
+                },
+                openedAsset: {
+                    type: Object,
+                    observer: '_openedAssetChanged'
+                },
+                mytestTableData: {
+                    type: Object
+                },
+                displayTags: {
+                    type: Array
+                },
+                showTimeseriesChart: {
+                    type: Boolean,
+                    value: false
+                },
+                wsUrl: {
+                    type: String
+                },
+                timeSeriesOnly: {
+                    type: Boolean
+                },
+                dataExchangeEnabled: {
+                    type: Boolean,
+                    value: false
+                },
+                assetIsAClone: {
+                    type: Boolean,
+                    value: false
+                },
+                showCloneButton: {
+                    type: Boolean,
+                    value: false,
+                    computed: '_computeShowCloneButton(dataExchangeEnabled, assetIsAClone)'
+                },
+                uri: {
+                    type: String
+                }
+            },
+
+            _computeShowCloneButton: function (dataExchangeEnabled, assetIsAClone) {
+                // show clone button if dx is enabled, and we're not looking at a clone.
+                // don't show clone button if there's already a clone.
+                return dataExchangeEnabled && !assetIsAClone && !localStorage.getItem('clonedAssetId');
+            },
+
+            _formatTagsForDisplay: function (assetTag) {
+                var tags = [];
+                Object.keys(assetTag).forEach(function (key) {
+                    var tag = {
+                        key: assetTag[key].timeseriesDatasource.tag,
+                        val: assetTag[key].label,
+                        unit: 'psi'
+                    }
+                    if (tag.key.indexOf('Temperature') > -1) {
+                        tag.unit = 'F';
+                    } else if (tag.key.indexOf('Ratio') > -1) {
+                        tag.unit = '';
+                    } else if (tag.key.indexOf('Velocity') > -1) {
+                        tag.unit = 'm/s'
+                    }
+                    tags.push(tag);
+                });
+                return tags;
+            },
+            _openedAssetChanged: function (newVal) {
+                console.log('asset opened:', newVal);
+                this.set('uri', newVal.uri);
+                // console.log('********* in rmd-view, the value of uri is ' + this.uri);
+                this.$.mytesttableAjaxEl.url = "/api/testdata" + newVal.uri;
+                this.$.mytesttableAjaxEl.generateRequest();
+                this.$.saveBtn.removeAttribute('hidden');
+                this.$.saveBtn.style.display = "block";
+                this.$.readBtn.removeAttribute('hidden');
+                this.$.readBtn.style.display = "inline-block";
+                console.log('#### export button hidden state is ' + this.$.saveBtn.hidden);
+            },
+
+            _readMyTestData: function () {
+                
+            },
+
+            _saveMyTestData: function () {
+                window.open('/downloads/csv/C001.csv', '_self');
+            },
+
+            // We'll load the timeseries-chart asynchronously, since it's pretty heavy.
+            _loadFragment: function (elementId, fragmentPath) {
+                if (Polymer.isInstance(this.$[elementId])) {
+                    return;
+                }
+                Polymer.Base.importHref(fragmentPath, null, function () {
+                    console.log('failed to load:', fragmentPath);
+                }, true);
+            },
+
+            ready: function () {
+
+                // set copy of 'this' for callback function use below
+                var that = this;
+                // initialize refresh interval
+
+                this.$.assetBrowser.addEventListener('px-app-asset-selected', function (evt) {
+                    // console.log('px-app-asset-selected', evt);
+                    this.openedAsset = evt.detail.item;
+                }.bind(this));
+
+
+                this.$.mytesttableAjaxEl.addEventListener('response', function (evt) {
+                    this.mytestTableData = evt.detail.response;
+                }.bind(this));
+
+                // Set refresh  button behavior
+            }
+        });
+    </script>
+</dom-module>
